@@ -102,6 +102,7 @@ struct lyd_node *lys_getnext_data(const struct lyd_node *last, const struct lyd_
  * @param[in] value String value to be parsed.
  * @param[in] value_len Length of @p value, must be set correctly.
  * @param[in,out] dynamic Flag if @p value is dynamically allocated, is adjusted when @p value is consumed.
+ * @param[in] value_hint [Hint options](@ref lydvalueparseopts) from the parser regarding the value type.
  * @param[in] get_prefix Parser-specific getter to resolve prefixes used in the @p value string.
  * @param[in] prefix_data User data for @p get_prefix.
  * @param[in] format Input format of @p value.
@@ -110,8 +111,8 @@ struct lyd_node *lys_getnext_data(const struct lyd_node *last, const struct lyd_
  * @return LY_EINCOMPLETE in case data tree is needed to finish the validation.
  * @return LY_ERR value if an error occurred.
  */
-LY_ERR lyd_create_term(const struct lysc_node *schema, const char *value, size_t value_len, int *dynamic,
-                       ly_clb_resolve_prefix get_prefix, void *prefix_data, LYD_FORMAT format, struct lyd_node **node);
+LY_ERR lyd_create_term(const struct lysc_node *schema, const char *value, size_t value_len, int *dynamic, int value_hint,
+                       ly_resolve_prefix_clb get_prefix, void *prefix_data, LYD_FORMAT format, struct lyd_node **node);
 
 /**
  * @brief Create a term (leaf/leaf-list) node from a parsed value by duplicating it.
@@ -177,18 +178,19 @@ LY_ERR lyd_create_any(const struct lysc_node *schema, const void *value, LYD_ANY
  * @param[in] value String value to be parsed.
  * @param[in] value_len Length of @p value, must be set correctly.
  * @param[in,out] dynamic Flag if @p value is dynamically allocated, is adjusted when @p value is consumed.
+ * @param[in] value_hint [Value hint](@ref lydvalueparseopts) from the parser regarding the value type.
  * @param[in] format Input format of @p value and @p ns.
  * @param[in] val_prefs Possible value prefixes, array is spent.
  * @param[in] prefix Element prefix.
  * @param[in] pref_len Length of @p prefix, must be set correctly.
- * @param[in] ns Node namespace, meaning depends on @p format.
+ * @param[in] module_key Mandatory key to reference module, can be namespace or name.
  * @param[out] node Created node.
  * @return LY_SUCCESS on success.
  * @return LY_ERR value if an error occurred.
  */
 LY_ERR lyd_create_opaq(const struct ly_ctx *ctx, const char *name, size_t name_len, const char *value, size_t value_len,
-                       int *dynamic, LYD_FORMAT format, struct ly_prefix *val_prefs, const char *prefix, size_t pref_len,
-                       const char *ns, struct lyd_node **node);
+                       int *dynamic, int value_hint, LYD_FORMAT format, struct ly_prefix *val_prefs, const char *prefix, size_t pref_len,
+                       const char *module_key, struct lyd_node **node);
 
 /**
  * @brief Check the existence and create any non-existing implicit siblings, recursively for the created nodes.
@@ -237,6 +239,7 @@ void lyd_insert_node(struct lyd_node *parent, struct lyd_node **first_sibling, s
  * @param[in] value String value to be parsed.
  * @param[in] value_len Length of @p value, must be set correctly.
  * @param[in,out] dynamic Flag if @p value is dynamically allocated, is adjusted when @p value is consumed.
+ * @param[in] value_hint [Value hint](@ref lydvalueparseopts) from the parser regarding the value type.
  * @param[in] resolve_prefix Parser-specific getter to resolve prefixes used in the @p value string.
  * @param[in] prefix_data User data for @p get_prefix.
  * @param[in] format Input format of @p value.
@@ -246,8 +249,17 @@ void lyd_insert_node(struct lyd_node *parent, struct lyd_node **first_sibling, s
  * @return LY_ERR value if an error occurred.
  */
 LY_ERR lyd_create_meta(struct lyd_node *parent, struct lyd_meta **meta, const struct lys_module *mod, const char *name,
-                       size_t name_len, const char *value, size_t value_len, int *dynamic, ly_clb_resolve_prefix resolve_prefix,
-                       void *prefix_data, LYD_FORMAT format, const struct lysc_node *ctx_snode);
+                       size_t name_len, const char *value, size_t value_len, int *dynamic, int value_hint,
+                       ly_resolve_prefix_clb resolve_prefix, void *prefix_data, LYD_FORMAT format, const struct lysc_node *ctx_snode);
+
+/**
+ * @brief Insert a metadata (last) into a parent
+ *
+ * @param[in] parent Parent of the metadata.
+ * @param[in] meta Metadata (list) to be added into the @p parent.
+ * @return LY_SUCCESS on success.
+ */
+LY_ERR lyd_insert_meta(struct lyd_node *parent, struct lyd_meta *meta);
 
 /**
  * @brief Create and insert a generic attribute (last) into a parent.
@@ -260,17 +272,31 @@ LY_ERR lyd_create_meta(struct lyd_node *parent, struct lyd_meta **meta, const st
  * @param[in] value String value to be parsed.
  * @param[in] value_len Length of @p value, must be set correctly.
  * @param[in,out] dynamic Flag if @p value is dynamically allocated, is adjusted when @p value is consumed.
+ * @param[in] value_hint [Value hint](@ref lydvalueparseopts) from the parser regarding the value type.
  * @param[in] format Input format of @p value and @p ns.
  * @param[in] val_prefs Possible value prefixes, array is spent.
  * @param[in] prefix Attribute prefix.
  * @param[in] prefix_len Attribute prefix length.
- * @param[in] ns Attribute namespace, meaning depends on @p format.
+ * @param[in] module_key Mandatory key to reference module, can be namespace or name.
  * @return LY_SUCCESS on success.
  * @return LY_ERR value if an error occurred.
  */
-LY_ERR ly_create_attr(struct lyd_node *parent, struct ly_attr **attr, const struct ly_ctx *ctx, const char *name,
-                      size_t name_len, const char *value, size_t value_len, int *dynamic, LYD_FORMAT format,
-                      struct ly_prefix *val_prefs, const char *prefix, size_t prefix_len, const char *ns);
+LY_ERR lyd_create_attr(struct lyd_node *parent, struct lyd_attr **attr, const struct ly_ctx *ctx, const char *name,
+                       size_t name_len, const char *value, size_t value_len, int *dynamic, int value_hint, LYD_FORMAT format,
+                       struct ly_prefix *val_prefs, const char *prefix, size_t prefix_len, const char *module_key);
+
+/**
+ * @defgroup lydvalueparseopts Hint options for type plugin callbacks from the data parsers.
+ *
+ * Options applicable to ly_value_parse()
+ * @{
+ */
+#define LYD_VALUE_PARSE_ISSTRING LY_TYPE_OPTS_ISSTRING /**< The input value is supposed to be a string. */
+#define LYD_VALUE_PARSE_ISNUMBER LY_TYPE_OPTS_ISNUMBER /**< The input value is supposed to be a number. */
+#define LYD_VALUE_PARSE_ISBOOLEAN LY_TYPE_OPTS_ISBOOLEAN /**< The input value is supposed to be a boolean. */
+#define LYD_VALUE_PARSE_ISEMPTY LY_TYPE_OPTS_ISEMPTY /**< The input value is supposed to be empty type. */
+
+/** @} lydvalueparseopts */
 
 /**
  * @brief Validate, canonize and store the given @p value into the node according to the node's type's rules.
@@ -280,6 +306,7 @@ LY_ERR ly_create_attr(struct lyd_node *parent, struct ly_attr **attr, const stru
  * @param[in] value_len Length of the give @p value, must be set correctly.
  * @param[in,out] dynamic Flag if @p value is dynamically allocated, is adjusted when @p value is consumed.
  * @param[in] second Flag for the second call after returning LY_EINCOMPLETE
+ * @param[in] value_hint [Value hint](@ref lydvalueparseopts) from the parser.
  * @param[in] get_prefix Parser-specific getter to resolve prefixes used in the @p value string.
  * @param[in] parser Parser's data for @p get_prefix
  * @param[in] format Input format of @p value.
@@ -290,12 +317,12 @@ LY_ERR ly_create_attr(struct lyd_node *parent, struct ly_attr **attr, const stru
  * @return LY_EINCOMPLETE in case the @p trees is not provided and it was needed to finish the validation.
  * @return LY_ERR value if an error occurred.
  */
-LY_ERR lyd_value_parse(struct lyd_node_term *node, const char *value, size_t value_len, int *dynamic, int second,
-                       ly_clb_resolve_prefix get_prefix, void *parser, LYD_FORMAT format, const struct lyd_node *tree);
+LY_ERR lyd_value_parse(struct lyd_node_term *node, const char *value, size_t value_len, int *dynamic, int second, int value_hint,
+                       ly_resolve_prefix_clb get_prefix, void *parser, LYD_FORMAT format, const struct lyd_node *tree);
 
 /* similar to lyd_value_parse except can be used just to store the value, hence does also not support a second call */
 LY_ERR lyd_value_store(struct lyd_value *val, const struct lysc_node *schema, const char *value, size_t value_len,
-                       int *dynamic, ly_clb_resolve_prefix get_prefix, void *parser, LYD_FORMAT format);
+                       int *dynamic, ly_resolve_prefix_clb get_prefix, void *parser, LYD_FORMAT format);
 
 /**
  * @brief Validate, canonize and store the given @p value into the metadata according to the annotation type's rules.
@@ -306,6 +333,7 @@ LY_ERR lyd_value_store(struct lyd_value *val, const struct lysc_node *schema, co
  * @param[in] value_len Length of the give @p value, must be set correctly.
  * @param[in,out] dynamic Flag if @p value is dynamically allocated, is adjusted when @p value is consumed.
  * @param[in] second Flag for the second call after returning LY_EINCOMPLETE
+ * @param[in] value_hint [Value hint](@ref lydvalueparseopts) from the parser.
  * @param[in] get_prefix Parser-specific getter to resolve prefixes used in the @p value string.
  * @param[in] parser Parser's data for @p get_prefix
  * @param[in] format Input format of the data.
@@ -318,8 +346,8 @@ LY_ERR lyd_value_store(struct lyd_value *val, const struct lysc_node *schema, co
  * @return LY_ERR value if an error occurred.
  */
 LY_ERR lyd_value_parse_meta(const struct ly_ctx *ctx, struct lyd_meta *meta, const char *value, size_t value_len,
-                            int *dynamic, int second, ly_clb_resolve_prefix get_prefix, void *parser, LYD_FORMAT format,
-                            const struct lysc_node *ctx_snode, const struct lyd_node *tree);
+                            int *dynamic, int second, int value_hint, ly_resolve_prefix_clb get_prefix, void *parser,
+                            LYD_FORMAT format, const struct lysc_node *ctx_snode, const struct lyd_node *tree);
 
 /* generic function lys_value_validate */
 LY_ERR _lys_value_validate(const struct ly_ctx *ctx, const struct lysc_node *node, const char *value, size_t value_len,
@@ -333,10 +361,11 @@ LY_ERR _lys_value_validate(const struct ly_ctx *ctx, const struct lysc_node *nod
  * @param[in] parse_options Options for parser, see @ref dataparseroptions.
  * @param[in] validate_options Options for the validation phase, see @ref datavalidationoptions.
  * @param[out] tree Parsed data tree. Note that NULL can be a valid result.
+ * @param[out] lydctx_p Data parser context to finish validation.
  * @return LY_ERR value.
  */
 LY_ERR lyd_parse_xml_data(const struct ly_ctx *ctx, struct ly_in *in, int parse_options, int validate_options,
-                          struct lyd_node **tree);
+                          struct lyd_node **tree, struct lyd_ctx **lydctx_p);
 
 /**
  * @brief Parse XML string as YANG RPC/action invocation.
@@ -382,6 +411,62 @@ LY_ERR lyd_parse_xml_notif(const struct ly_ctx *ctx, struct ly_in *in, struct ly
 LY_ERR lyd_parse_xml_reply(const struct lyd_node *request, struct ly_in *in, struct lyd_node **tree, struct lyd_node **op);
 
 /**
+ * @brief Parse JSON string as YANG data tree.
+ *
+ * @param[in] ctx libyang context
+ * @param[in] in Input structure.
+ * @param[in] parse_options Options for parser, see @ref dataparseroptions.
+ * @param[in] validate_options Options for the validation phase, see @ref datavalidationoptions.
+ * @param[out] tree Parsed data tree. Note that NULL can be a valid result.
+ * @param[out] lydctx_p Data parser context to finish validation.
+ * @return LY_ERR value.
+ */
+LY_ERR lyd_parse_json_data(const struct ly_ctx *ctx, struct ly_in *in, int parse_options, int validate_options,
+                           struct lyd_node **tree, struct lyd_ctx **lydctx_p);
+
+/**
+ * @brief Parse JSON string as YANG notification.
+ *
+ * Optional top-level "notification" envelope object, if present, is [checked](https://tools.ietf.org/html/rfc5277#page-25)
+ * and parsed. Specifically the child "eventTime" member and its value.
+ *
+ * @param[in] ctx libyang context.
+ * @param[in] in Input structure.
+ * @param[out] tree Parsed full notification tree.
+ * @param[out] op Optional pointer to the actual notification. Useful mainly for nested notifications.
+ * @return LY_ERR value.
+ */
+LY_ERR lyd_parse_json_notif(const struct ly_ctx *ctx, struct ly_in *in, struct lyd_node **tree, struct lyd_node **ntf);
+
+/**
+ * @brief Parse JSON string as YANG RPC/action invocation.
+ *
+ * Optional top-level "rpc" envelope object, if present is is [checked](https://tools.ietf.org/html/rfc6241#section-4.1) and the parser
+ * goes inside for the content, which is an RPC data or "action" envelope objects. The "action" envelope object is
+ * also [checked](https://tools.ietf.org/html/rfc7950#section-7.15.2) and then an action data is expected as a content of this envelope.
+ *
+ * @param[in] ctx libyang context.
+ * @param[in] in Input structure.
+ * @param[out] tree Parsed full RPC/action tree.
+ * @param[out] op Optional pointer to the actual operation. Useful mainly for action.
+ * @return LY_ERR value.
+ */
+LY_ERR lyd_parse_json_rpc(const struct ly_ctx *ctx, struct ly_in *in, struct lyd_node **tree, struct lyd_node **op);
+
+/**
+ * @brief Parse JSON string as YANG RPC/action reply.
+ *
+ * Optional "rpc-reply" envelope object, if present, is [checked](https://tools.ietf.org/html/rfc6241#section-4.2).
+ *
+ * @param[in] request Data tree of the RPC/action request.
+ * @param[in] in Input structure.
+ * @param[out] tree Parsed full reply tree. It always includes duplicated operation and parents of the @p request.
+ * @param[out] op Optional pointer to the reply operation. Useful mainly for action.
+ * @return LY_ERR value.
+ */
+LY_ERR lyd_parse_json_reply(const struct lyd_node *request, struct ly_in *in, struct lyd_node **tree, struct lyd_node **op);
+
+/**
  * @brief Parse binary data as YANG data tree.
  *
  * @param[in] ctx libyang context
@@ -389,10 +474,11 @@ LY_ERR lyd_parse_xml_reply(const struct lyd_node *request, struct ly_in *in, str
  * @param[in] parse_options Options for parser, see @ref dataparseroptions.
  * @param[in] validate_options Options for the validation phase, see @ref datavalidationoptions.
  * @param[out] tree Parsed data tree. Note that NULL can be a valid result.
+ * @param[out] lydctx_p Data parser context to finish validation.
  * @return LY_ERR value.
  */
 LY_ERR lyd_parse_lyb_data(const struct ly_ctx *ctx, struct ly_in *in, int parse_options, int validate_options,
-                          struct lyd_node **tree);
+                          struct lyd_node **tree, struct lyd_ctx **lydctx_p);
 
 /**
  * @brief Parse binary data as YANG RPC/action invocation.
