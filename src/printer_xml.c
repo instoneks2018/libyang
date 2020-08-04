@@ -44,11 +44,6 @@ struct xmlpr_ctx {
     struct ly_set ns;   /**< printed namespaces */
 };
 
-#define LEVEL ctx->level                     /**< current level */
-#define INDENT ((LEVEL) ? (LEVEL)*2 : 0),""  /**< indentation parameters for printer functions */
-#define LEVEL_INC if (LEVEL) {LEVEL++;}      /**< increase indentation level */
-#define LEVEL_DEC if (LEVEL) {LEVEL--;}      /**< decrease indentation level */
-
 #define LYXML_PREFIX_REQUIRED 0x01  /**< The prefix is not just a suggestion but a requirement. */
 #define LYXML_PREFIX_DEFAULT  0x02  /**< The namespace is required to be a default (without prefix) */
 
@@ -249,7 +244,7 @@ xml_print_node_open(struct xmlpr_ctx *ctx, const struct lyd_node *node)
 static LY_ERR
 xml_print_attr(struct xmlpr_ctx *ctx, const struct lyd_node_opaq *node)
 {
-    const struct ly_attr *attr;
+    const struct lyd_attr *attr;
     const char *pref;
     LY_ARRAY_COUNT_TYPE u;
 
@@ -316,11 +311,11 @@ xml_print_term(struct xmlpr_ctx *ctx, const struct lyd_node_term *node)
     ly_set_erase(&ns_list, NULL);
 
     if (!value || !value[0]) {
-        ly_print(ctx->out, "/>%s", LEVEL ? "\n" : "");
+        ly_print(ctx->out, "/>%s", DO_FORMAT ? "\n" : "");
     } else {
         ly_print(ctx->out, ">");
         lyxml_dump_text(ctx->out, value, 0);
-        ly_print(ctx->out, "</%s>%s", node->schema->name, LEVEL ? "\n" : "");
+        ly_print(ctx->out, "</%s>%s", node->schema->name, DO_FORMAT ? "\n" : "");
     }
     if (dynamic) {
         free((void *)value);
@@ -343,12 +338,12 @@ xml_print_inner(struct xmlpr_ctx *ctx, const struct lyd_node_inner *node)
     xml_print_node_open(ctx, (struct lyd_node *)node);
 
     if (!node->child) {
-        ly_print(ctx->out, "/>%s", ctx->level ? "\n" : "");
+        ly_print(ctx->out, "/>%s", DO_FORMAT ? "\n" : "");
         return LY_SUCCESS;
     }
 
     /* children */
-    ly_print(ctx->out, ">%s", ctx->level ? "\n" : "");
+    ly_print(ctx->out, ">%s", DO_FORMAT ? "\n" : "");
 
     LEVEL_INC;
     LY_LIST_FOR(node->child, child) {
@@ -357,7 +352,7 @@ xml_print_inner(struct xmlpr_ctx *ctx, const struct lyd_node_inner *node)
     }
     LEVEL_DEC;
 
-    ly_print(ctx->out, "%*s</%s>%s", INDENT, node->schema->name, LEVEL ? "\n" : "");
+    ly_print(ctx->out, "%*s</%s>%s", INDENT, node->schema->name, DO_FORMAT ? "\n" : "");
 
     return LY_SUCCESS;
 }
@@ -375,7 +370,7 @@ xml_print_anydata(struct xmlpr_ctx *ctx, const struct lyd_node_any *node)
     if (!any->value.tree) {
         /* no content */
 no_content:
-        ly_print(ctx->out, "/>%s", LEVEL ? "\n" : "");
+        ly_print(ctx->out, "/>%s", DO_FORMAT ? "\n" : "");
         return LY_SUCCESS;
     } else {
         if (any->value_type == LYD_ANYDATA_LYB) {
@@ -401,7 +396,7 @@ no_content:
             ctx->options &= ~LYD_PRINT_WITHSIBLINGS;
             LEVEL_INC;
 
-            ly_print(ctx->out, ">%s", LEVEL ? "\n" : "");
+            ly_print(ctx->out, ">%s", DO_FORMAT ? "\n" : "");
             LY_LIST_FOR(any->value.tree, iter) {
                 ret = xml_print_node(ctx, iter);
                 LY_CHECK_ERR_RET(ret, LEVEL_DEC, ret);
@@ -435,9 +430,9 @@ no_content:
 
         /* closing tag */
         if (any->value_type == LYD_ANYDATA_DATATREE) {
-            ly_print(ctx->out, "%*s</%s>%s", INDENT, node->schema->name, LEVEL ? "\n" : "");
+            ly_print(ctx->out, "%*s</%s>%s", INDENT, node->schema->name, DO_FORMAT ? "\n" : "");
         } else {
-            ly_print(ctx->out, "</%s>%s", node->schema->name, LEVEL ? "\n" : "");
+            ly_print(ctx->out, "</%s>%s", node->schema->name, DO_FORMAT ? "\n" : "");
         }
     }
 
@@ -467,7 +462,7 @@ xml_print_opaq(struct xmlpr_ctx *ctx, const struct lyd_node_opaq *node)
     if (node->child) {
         /* children */
         if (!node->value[0]) {
-            ly_print(ctx->out, ">%s", ctx->level ? "\n" : "");
+            ly_print(ctx->out, ">%s", DO_FORMAT ? "\n" : "");
         }
 
         LEVEL_INC;
@@ -477,12 +472,12 @@ xml_print_opaq(struct xmlpr_ctx *ctx, const struct lyd_node_opaq *node)
         }
         LEVEL_DEC;
 
-        ly_print(ctx->out, "%*s</%s>%s", INDENT, node->name, LEVEL ? "\n" : "");
+        ly_print(ctx->out, "%*s</%s>%s", INDENT, node->name, DO_FORMAT ? "\n" : "");
     } else if (node->value[0]) {
-        ly_print(ctx->out, "</%s>%s", node->name, LEVEL ? "\n" : "");
+        ly_print(ctx->out, "</%s>%s", node->name, DO_FORMAT ? "\n" : "");
     } else {
         /* no value or children */
-        ly_print(ctx->out, "/>%s", ctx->level ? "\n" : "");
+        ly_print(ctx->out, "/>%s", DO_FORMAT ? "\n" : "");
     }
 
     return LY_SUCCESS;
